@@ -31,3 +31,4 @@
 $string['pluginname'] = 'Kursgruppen durch Profilfelder';
 
 $string['settings_groupbyprofilefields_linkedfields'] = "Für Kursgruppen zu verwendende Profilfelder.";
+$string['settings_groupbyprofilefields_enrols'] = "Gruppen dieser Einschreibemethoden verwalten.";

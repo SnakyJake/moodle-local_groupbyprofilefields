@@ -31,3 +31,4 @@
 $string['pluginname'] = 'Course Groups by Profile Fields';
 
 $string['settings_groupbyprofilefields_linkedfields'] = "Profile fields to use for generating course groups.";
+$string['settings_groupbyprofilefields_enrols'] = "Control groups of these enrolment methods.";

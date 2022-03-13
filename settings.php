@@ -35,11 +35,17 @@ defined('MOODLE_INTERNAL') || die();
 if ($hassiteconfig){
     $pluginname = get_string("pluginname","local_groupbyprofilefields");
     $options = $DB->get_records_menu('user_info_field',null,'',"id, CONCAT(shortname,' (',name,')')");
+    $enrols = array_flip(explode(',', $CFG->enrol_plugins_enabled));
+    array_walk($enrols,function(&$value,$key){
+            $value =  get_string('pluginname', 'enrol_'.$key);
+        });
 
     $ADMIN->add('localplugins',new admin_category('localgroupbyprofilefields',$pluginname));
     $settings = new admin_settingpage('local_groupbyprofilefields_settings', get_string('settings'));
     $settings->add(new admin_setting_heading('local_groupbyprofilefields/settings',get_string('settings'),''));
+
     $settings->add(new admin_setting_configmultiselect('local_groupbyprofilefields/linkedfields', get_string('settings_groupbyprofilefields_linkedfields','local_groupbyprofilefields'),'',[],$options));
+    $settings->add(new admin_setting_configmultiselect('local_groupbyprofilefields/enrols', get_string('settings_groupbyprofilefields_enrols','local_groupbyprofilefields'),'',[],$enrols));
 
     $ADMIN->add('localgroupbyprofilefields', $settings);
 }

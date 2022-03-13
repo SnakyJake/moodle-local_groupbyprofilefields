@@ -31,6 +31,7 @@
 namespace local_groupbyprofilefields;
 
 require_once($CFG->dirroot."/group/lib.php");
+require_once($CFG->dirroot."/cache/lib.php");
 
 use \core\event;
 //use \local_autogroup\usecase;
@@ -45,42 +46,66 @@ use \core\event;
  */
 class event_handler
 {
+	private static $_cfg = null;
+
 	private static function create_missing_groups($userid,$groupname){
 		global $DB;
+		//ensure $_cfg is initialized, maybe there is a better way...
+		self::$_cfg?null:self::$_cfg = get_config('local_groupbyprofilefields');
+		if(!(isset(self::$_cfg->enrols) && !empty(self::$_cfg->enrols))){
+			return;
+		}
+		list($sqlin,$params) = $DB->get_in_or_equal(explode(",",self::$_cfg->enrols), SQL_PARAMS_NAMED);
+
 		$sql = "INSERT INTO {groups} (courseid, name, idnumber, timecreated, timemodified)
-				SELECT DISTINCT c.id AS courseid, ?, ?, unix_timestamp(), unix_timestamp() 
+				SELECT DISTINCT c.id AS courseid, :groupname1, :groupname_suffixed, unix_timestamp(), unix_timestamp() 
 					FROM mdl_course c
 					JOIN {groups} g ON g.courseid = c.id
 					JOIN {groups_members} gm ON g.id = gm.groupid
-					JOIN {enrol} e ON e.courseid = c.id
-					JOIN {user_enrolments} ue ON ue.enrolid = e.id
+					JOIN {enrol} e 
+						ON e.courseid = c.id"
+						.($sqlin?" AND e.enrol ":"").$sqlin.
+					"JOIN {user_enrolments} ue ON ue.enrolid = e.id
 					WHERE NOT EXISTS (
 						SELECT * 
 						FROM {groups} g2
-						WHERE g2.name = ? 
+						WHERE g2.name = :groupname2
 						AND g.courseid = g2.courseid)
-					AND ue.userid = ?";
-		$DB->execute($sql, [$groupname,$groupname." local_groupbyprofilefields",$groupname,$userid]);
+					AND ue.userid = :userid";
+		$params["groupname1"] = $params["groupname2"] = $groupname;
+		$params["groupname_suffixed"] = $groupname." local_groupbyprofilefields";
+		$params["userid"] = $userid;
+		$DB->execute($sql, $params);
 	}
 
 	private static function create_missing_enrolments($userid,$groupname){
 		global $DB;
+		//ensure $_cfg is initialized, maybe there is a better way...
+		self::$_cfg?null:self::$_cfg = get_config('local_groupbyprofilefields');
+		if(!(isset(self::$_cfg->enrols) && !empty(self::$_cfg->enrols))){
+			return;
+		}
+		list($sqlin,$params) = $DB->get_in_or_equal(explode(",",self::$_cfg->enrols), SQL_PARAMS_NAMED);
 
 		$sql = "INSERT INTO {groups_members} (groupid,component, timeadded, userid) 
-				SELECT DISTINCT g.id AS groupid, 'local_groupbyprofilefields', unix_timestamp(), ? 
+				SELECT DISTINCT g.id AS groupid, 'local_groupbyprofilefields', unix_timestamp(), :userid1
 					FROM {groups} g
 					JOIN {course} c ON c.id = g.courseid
-					JOIN {enrol} e ON e.courseid = c.id
-					JOIN {user_enrolments} ue ON ue.enrolid = e.id
+					JOIN {enrol} e 
+						ON e.courseid = c.id"
+						.($sqlin?" AND e.enrol ":"").$sqlin.
+					"JOIN {user_enrolments} ue ON ue.enrolid = e.id
 					WHERE NOT EXISTS (
 						SELECT * 
 						FROM {groups_members} gm
 						WHERE gm.groupid = g.id
-						AND gm.userid = ?)
-					AND g.name = ?
-					AND ue.userid = ?";
+						AND gm.userid = :userid2)
+					AND g.name = :groupname
+					AND ue.userid = :userid3";
+		$params["groupname"] = $groupname;
+		$params["userid1"] = $params["userid2"] = $params["userid3"] = $userid;
 
-		$DB->execute($sql, [$userid, $userid, $groupname, $userid]);
+		$DB->execute($sql, $params);
 	}
 	private static function remove_from_groups($userid,$groupnames){
 		global $DB;
@@ -111,11 +136,12 @@ class event_handler
 	}
 
 	private static function get_linked_profilefield_values($userid){
-		$_cfg = get_config('local_groupbyprofilefields');
-		if(!(isset($_cfg->linkedfields) && !empty($_cfg->linkedfields))){
+		//ensure $_cfg is initialized, maybe there is a better way...
+		self::$_cfg?null:self::$_cfg = get_config('local_groupbyprofilefields');
+		if(!(isset(self::$_cfg->linkedfields) && !empty(self::$_cfg->linkedfields))){
 			return;
 		}
-		$linkedfield_ids = explode(',',$_cfg->linkedfields);
+		$linkedfield_ids = explode(',',self::$_cfg->linkedfields);
 
 		$profilefields = profile_get_user_fields_with_data($userid);
 
@@ -191,6 +217,7 @@ class event_handler
 				}
 			}
 		}
+		\cache_helper::invalidate_by_definition('core', 'user_group_groupings', array(), array($userid));
 	}
 
 	/**
@@ -214,7 +241,8 @@ class event_handler
 		//right now identified by idnumber, which ist editable by users...
 		self::remove_selfgenerated_empty_groups();
 
-		$userid = $userid;
+		\cache_helper::invalidate_by_definition('core', 'user_group_groupings', array(), array($userid));
+		\cache_helper::purge_by_definition('core', 'groupdata');
 	}
 
 	public static function user_created(event\user_created $event)
