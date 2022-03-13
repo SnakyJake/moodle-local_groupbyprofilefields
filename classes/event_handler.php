@@ -60,7 +60,7 @@ class event_handler
 						WHERE g2.name = ? 
 						AND g.courseid = g2.courseid)
 					AND ue.userid = ?";
-		$DB->execute($sql, [$groupname,$groupname,$groupname,$userid]);
+		$DB->execute($sql, [$groupname,$groupname." local_groupbyprofilefields",$groupname,$userid]);
 	}
 
 	private static function create_missing_enrolments($userid,$groupname){
@@ -95,6 +95,19 @@ class event_handler
 					AND g.name ".$sqlin.")";
 		$params["userid"] = $userid;
 		$DB->execute($sql, $params);
+	}
+	private static function remove_selfgenerated_empty_groups(){
+		global $DB;
+		$sql = "DELETE 
+				FROM {groups} g
+				WHERE g.idnumber LIKE '%local_groupbyprofilefields'
+				AND NOT EXISTS(
+					SELECT * 
+					FROM mdl_groups_members gm 
+					WHERE gm.groupid = g.id 
+					AND gm.component = 'local_groupbyprofilefields')";
+
+		$DB->execute($sql, []);
 	}
 
 	private static function get_linked_profilefield_values($userid){
@@ -198,7 +211,8 @@ class event_handler
 		self::remove_from_groups($userid,$groups_profilefields);
 		//remove unused groups?
 		//I cannot find a way to determine for sure, which groups were created by us
-		//self::remove_unused_groups($userid,$groups_profilefields);
+		//right now identified by idnumber, which ist editable by users...
+		self::remove_selfgenerated_empty_groups();
 
 		$userid = $userid;
 	}
