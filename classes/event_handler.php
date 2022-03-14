@@ -247,7 +247,19 @@ class event_handler
 
 	public static function user_created(event\user_created $event)
 	{
-		//cohort_add_cohort(array('name' => 'MGG_abc'));
-		//role_assign();
+		$userid = (int) $event->relateduserid;
+		$profilefield_values = self::get_linked_profilefield_values($userid);
+
+		$groups_profilefields = self::array_cartesian_product($profilefield_values);
+
+		foreach($groups_profilefields as $groupname){
+			self::create_missing_groups($userid, $groupname);
+			self::create_missing_enrolments($userid, $groupname);
+		}
+
+		//no need to do the removal stuff, because user has just been created
+
+		\cache_helper::invalidate_by_definition('core', 'user_group_groupings', array(), array($userid));
+		\cache_helper::purge_by_definition('core', 'groupdata');
 	}
 }
